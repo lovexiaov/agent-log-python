@@ -1,0 +1,77 @@
+"""AgentLog — language-neutral structured logging for Python (Schema v1).
+
+Standard-library only. Wire format conforms to
+``docs/schema/log-event.schema.json`` (additionalProperties: false).
+
+Quick start::
+
+    from agentlog import AgentLog, Level
+
+    AgentLog.bootstrap(config_json='{"service": "my-app"}')
+    AgentLog.info("hello", payload={"host": "example.com"})
+"""
+
+from agentlog.agentlog import (
+    bootstrap,
+    child,
+    critical,
+    debug,
+    error,
+    export_path,
+    info,
+    instance,
+    record_auto,
+    redact,
+    set_level,
+    trace,
+    warn,
+    warning,
+)
+from agentlog.config import LoggingConfig
+from agentlog.coretypes import EventType, get_session_id, install_crash_handler
+from agentlog.json import dumps, loads
+from agentlog.level import Level
+from agentlog.logger import Logger
+from agentlog.logevent import LogEvent
+from agentlog.redactor import DEFAULT_SENSITIVE_KEYS, MASK, Redactor
+from agentlog.sink import FileSink, MemorySink, Sink
+
+# Public facade: the process-wide singleton instance, so that
+# ``AgentLog.bootstrap(...)`` and ``AgentLog.info(...)`` behave as documented.
+AgentLog = instance()
+
+__all__ = [
+    "AgentLog",
+    "Logger",
+    "Level",
+    "EventType",
+    "LogEvent",
+    "LoggingConfig",
+    "Redactor",
+    "DEFAULT_SENSITIVE_KEYS",
+    "MASK",
+    "Sink",
+    "FileSink",
+    "MemorySink",
+    "dumps",
+    "loads",
+    "install_crash_handler",
+    "get_session_id",
+    # facade convenience
+    "bootstrap",
+    "instance",
+    "info",
+    "warn",
+    "warning",
+    "error",
+    "debug",
+    "trace",
+    "critical",
+    "record_auto",
+    "child",
+    "set_level",
+    "redact",
+    "export_path",
+]
+
+__version__ = "1.0.0"

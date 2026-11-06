@@ -1,0 +1,18 @@
+[project]
+name = "agent-log-python"
+version = "1.0.0"
+description = "Language-neutral AgentLog logging framework for Python (Schema v1, standard-library only)"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "AgentLog Contributors" }]
+
+[build-system]
+requires = []
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["agentlog*"]
+
+[tool.pytest.ini_options]
+# NOTE: this project is stdlib-only and uses unittest, not pytest.
