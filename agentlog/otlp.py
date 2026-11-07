@@ -386,9 +386,16 @@ def _first(payload, keys):
 
 
 def _to_number(value):
+    """Coerce a payload value to a number, **keeping float precision**.
+
+    ``int(42.5)`` would silently truncate a sub-millisecond duration to 42 and
+    make this SDK disagree with the Go/Java adapters (which both keep the
+    fraction). Integer-valued strings still become ``int`` so status codes are
+    emitted as ``intValue`` rather than ``doubleValue``.
+    """
     if isinstance(value, bool):
         return int(value)
-    if isinstance(value, int):
+    if isinstance(value, (int, float)):
         return value
     try:
         return int(value)
@@ -427,10 +434,12 @@ def _http_span(event, payload):
         if host:
             attrs.append(to_key_value(_SEMCONV_SERVER_ADDRESS, host))
     if status is not None:
-        attrs.append(to_key_value(_SEMCONV_HTTP_STATUS, status))
+        # Status codes are integers: emit intValue (not doubleValue) even when the
+        # payload carried `200.0`, matching the Go/Java adapters.
+        attrs.append(to_key_value(_SEMCONV_HTTP_STATUS, int(status)))
     error = None
     if status is not None and status >= 400:
-        error = str(status)
+        error = str(int(status))
     elif payload.get("error"):
         error = str(payload["error"])
     if error:

@@ -332,6 +332,43 @@ class SpanTest(unittest.TestCase):
         delta = int(span["endTimeUnixNano"]) - int(span["startTimeUnixNano"])
         self.assertEqual(delta, 14 * 1000000)
 
+    def test_fractional_duration_keeps_sub_millisecond_precision(self):
+        """42.5ms must stay 42.5ms — the Go/Java adapters keep the fraction.
+
+        Regression: ``int(42.5)`` truncated the duration to 42ms, which made this
+        SDK disagree with Go/Java on the same event (caught by the cross-language
+        comparison harness in ``tools/otlp-compat-verify``).
+        """
+        span = event_to_span(
+            make_event(
+                event_type="network_request",
+                payload={
+                    "method": "GET",
+                    "url": "https://api.example.com/v1/user",
+                    "status_code": 200.0,  # float status must still be intValue
+                    "duration_ms": 42.5,
+                },
+            )
+        )
+        delta = int(span["endTimeUnixNano"]) - int(span["startTimeUnixNano"])
+        self.assertEqual(delta, 42_500_000)
+
+        attrs = span["attributes"]
+        status = [kv for kv in attrs if kv["key"] == "http.response.status_code"][0]["value"]
+        self.assertEqual(status, {"intValue": "200"})
+
+    def test_fractional_duration_error_status_stays_integral(self):
+        span = event_to_span(
+            make_event(
+                event_type="network_request",
+                payload={"method": "GET", "url": "https://x/y", "status_code": 503.0, "duration_ms": 3.5},
+            )
+        )
+        self.assertEqual(span["status"]["code"], STATUS_CODE_ERROR)
+        attrs = span["attributes"]
+        error = [kv for kv in attrs if kv["key"] == "error.type"][0]["value"]
+        self.assertEqual(error, {"stringValue": "503"})
+
     def test_error_status_sets_error_type(self):
         span = event_to_span(
             make_event(
