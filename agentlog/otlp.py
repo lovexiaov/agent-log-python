@@ -514,6 +514,24 @@ def _span_scope(events):
     return {"scope": dict(_SCOPE), "spans": spans}
 
 
+def _merge_extra_resource(resource, extra_resource):
+    """Append ``extra_resource`` attributes, skipping keys agent-log owns.
+
+    Duplicate keys in OTLP are allowed by the proto but resolved arbitrarily by
+    backends (usually last-wins), so the spec rule "agent-log's own fields win
+    on conflict" has to be enforced here by dropping the extra key entirely.
+    """
+    if not extra_resource:
+        return resource
+    taken = {kv["key"] for kv in resource}
+    for kv in _key_values(extra_resource):
+        if kv["key"] in taken:
+            continue
+        resource.append(kv)
+        taken.add(kv["key"])
+    return resource
+
+
 def to_otlp_logs(events, extra_resource=None):
     """Build an OTLP/JSON ``ExportLogsServiceRequest`` body.
 
@@ -522,8 +540,7 @@ def to_otlp_logs(events, extra_resource=None):
     """
     resource_logs = []
     for _, group in _group_by_resource(events):
-        resource = _resource_attributes(group[0])
-        resource.extend(_key_values(extra_resource or {}))
+        resource = _merge_extra_resource(_resource_attributes(group[0]), extra_resource)
         resource_logs.append(
             {
                 "resource": {"attributes": resource},
@@ -540,8 +557,7 @@ def to_otlp_spans(events, extra_resource=None):
         scope = _span_scope(group)
         if not scope["spans"]:
             continue
-        resource = _resource_attributes(group[0])
-        resource.extend(_key_values(extra_resource or {}))
+        resource = _merge_extra_resource(_resource_attributes(group[0]), extra_resource)
         resource_spans.append(
             {
                 "resource": {"attributes": resource},

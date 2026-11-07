@@ -46,6 +46,11 @@ from agentlog.otlp import (
     to_otlp_spans,
     trace_id_hex,
 )
+from agentlog.otlp_http import (
+    DEFAULT_OTLP_ENDPOINT,
+    OTLPExportError,
+    OTLPExporter,
+)
 from agentlog.redactor import DEFAULT_SENSITIVE_KEYS, MASK, Redactor
 from agentlog.sink import FileSink, MemorySink, Sink
 
@@ -67,6 +72,9 @@ __all__ = [
     "FileSink",
     "MemorySink",
     "OTLPSink",
+    "OTLPExporter",
+    "OTLPExportError",
+    "DEFAULT_OTLP_ENDPOINT",
     "to_otlp",
     "to_otlp_json",
     "to_otlp_logs",

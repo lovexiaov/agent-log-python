@@ -24,6 +24,10 @@ Schema v1 (frozen 2026-11-02).
   `LogRecord` per event plus a `SPAN_KIND_CLIENT` span for `network_request`
   (HTTP semconv) and `db_query` (Database semconv); deterministic trace/span ids;
   `OTLPSink` buffers events for `/v1/logs` + `/v1/traces` POSTs. Stdlib only.
+- OTLP/HTTP exporter (`agentlog/otlp_http.py`): `OTLPExporter` puts those batches
+  on the wire (one signal per request, empty signals skipped). Retries `408`/`429`/`5xx`
+  and transport errors with exponential backoff; fails fast on other `4xx`;
+  injectable `sleep` for deterministic tests.
 - `EventType.DB_QUERY` (`"db_query"`) added for parity with the Go/Java SDKs.
 - Schema v1.1: optional top-level `span_id` (16 lowercase hex chars, same shape as
   the W3C `traceparent` span-id). Bind it via `child({"span_id": …})` so all events
@@ -32,3 +36,9 @@ Schema v1 (frozen 2026-11-02).
   (Go wrote `query`, Java `sql`); legacy keys are still accepted on read.
 - C7 `SchemaTests` validating every emitted line against Schema v1.
 - Build/test tooling: `pyproject.toml`, CI (`actions/setup-python` 3.11 + unittest), docs, LICENSE (MIT).
+
+### Fixed
+- `extra_resource` no longer duplicates resource attributes: keys agent-log owns
+  (`service.name`, `session.id`, …) are skipped instead of appended, so the spec
+  rule "agent-log's own fields win on conflict" actually holds. Previously the
+  extra value came last and backends resolved the duplicate in its favour.

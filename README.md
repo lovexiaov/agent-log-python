@@ -110,6 +110,24 @@ logs_body = to_otlp_json(batch["logs"])    # POST to <collector>/v1/logs
 traces_body = to_otlp_json(batch["traces"])# POST to <collector>/v1/traces
 ```
 
+The posting itself is one call — `agentlog.otlp_http.OTLPExporter` handles
+one-signal-per-request, skipping empty signals, and the OTLP retry policy:
+
+```python
+from agentlog import OTLPExporter
+
+exporter = OTLPExporter("http://localhost:4318")   # OTLP/HTTP default
+exporter.export(batch)                             # or exporter.export_sink(sink)
+```
+
+`2xx` succeeds; `408`/`429`/`5xx` and transport errors retry with exponential
+backoff (100 ms base, doubling, capped at 64×); other `4xx` fail fast because a
+malformed or unauthorised payload will not fix itself. Defaults: 2 retries, 10 s
+timeout.
+
+> The exporter is a transport, not a queue (no batching timer, no disk buffer,
+> no backpressure). In production point it at a local Collector.
+
 Mapping contract (details in `docs/logging-framework/OTLP-MAPPING.md`):
 
 | agent-log | OTLP |

@@ -217,6 +217,24 @@ class ResourceTest(unittest.TestCase):
         keys = {kv["key"] for kv in body["resourceLogs"][0]["resource"]["attributes"]}
         self.assertIn("service.version", keys)
 
+    def test_extra_resource_cannot_override_builtins(self):
+        # The spec says agent-log's own fields win on conflict; appending a
+        # duplicate key after them would let the backend pick the impostor.
+        body = to_otlp_logs(
+            [make_event(service="real-service")],
+            extra_resource={"service.name": "impostor", "service.version": "9.9.9"},
+        )
+        attrs = body["resourceLogs"][0]["resource"]["attributes"]
+        names = [kv["key"] for kv in attrs]
+        self.assertEqual(
+            len(names), len(set(names)), "duplicate resource attribute keys"
+        )
+        service_names = [
+            kv["value"]["stringValue"] for kv in attrs if kv["key"] == "service.name"
+        ]
+        self.assertEqual(service_names, ["real-service"])
+        self.assertIn("service.version", names)
+
 
 class LogRecordTest(unittest.TestCase):
     def test_core_fields(self):

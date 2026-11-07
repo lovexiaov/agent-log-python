@@ -15,6 +15,7 @@ from agentlog import AgentLog, LoggingConfig
 from agentlog.coretypes import install_crash_handler
 from agentlog import record_network_request, instrument_requests
 from agentlog.otlp import OTLPSink, to_otlp_json
+from agentlog.otlp_http import OTLPExporter
 
 
 def main():
@@ -93,6 +94,14 @@ def main():
     otlp_batch = otlp_sink.drain()
     print("OTLP logs :", to_otlp_json(otlp_batch["logs"])[:320], "...")
     print("OTLP spans:", to_otlp_json(otlp_batch["traces"])[:320], "...")
+
+    # 端到端导出：设置 AGENTLOG_OTLP_ENDPOINT 即把同一批次真正 POST 到 collector
+    # （不设则保持离线，示例在 CI 里不会访问网络）。
+    #   AGENTLOG_OTLP_ENDPOINT=http://127.0.0.1:4318 python3 example/main.py
+    endpoint = os.environ.get("AGENTLOG_OTLP_ENDPOINT")
+    if endpoint:
+        OTLPExporter(endpoint).export(otlp_batch)
+        print("OTLP exported to", endpoint)
 
     # 默认不触发崩溃演示，使示例在 CI 中以退出码 0 正常结束（防退化）。
     # 想演示 crash handler 捕获未捕获异常时，运行：
