@@ -34,6 +34,18 @@ from agentlog.json import dumps, loads
 from agentlog.level import Level
 from agentlog.logger import Logger
 from agentlog.logevent import LogEvent
+from agentlog.otlp import (
+    OTLPSink,
+    event_to_log_record,
+    event_to_span,
+    level_to_severity,
+    parse_timestamp_nanos,
+    to_otlp,
+    to_otlp_json,
+    to_otlp_logs,
+    to_otlp_spans,
+    trace_id_hex,
+)
 from agentlog.redactor import DEFAULT_SENSITIVE_KEYS, MASK, Redactor
 from agentlog.sink import FileSink, MemorySink, Sink
 
@@ -54,6 +66,16 @@ __all__ = [
     "Sink",
     "FileSink",
     "MemorySink",
+    "OTLPSink",
+    "to_otlp",
+    "to_otlp_json",
+    "to_otlp_logs",
+    "to_otlp_spans",
+    "event_to_log_record",
+    "event_to_span",
+    "level_to_severity",
+    "parse_timestamp_nanos",
+    "trace_id_hex",
     "dumps",
     "loads",
     "install_crash_handler",

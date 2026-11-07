@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from agentlog import AgentLog, LoggingConfig
 from agentlog.coretypes import install_crash_handler
 from agentlog import record_network_request, instrument_requests
+from agentlog.otlp import OTLPSink, to_otlp_json
 
 
 def main():
@@ -53,6 +54,29 @@ def main():
     # instrument_requests() is a no-op when `requests` is not installed.
 
     print("Export path:", AgentLog.export_path())
+
+    # ---- OTLP export (D3): same events, translated to OpenTelemetry -------
+    # OTLPSink buffers the *already redacted* events; drain() returns the
+    # OTLP/JSON bodies to POST to a Collector (/v1/logs and /v1/traces).
+    otlp_sink = OTLPSink(extra_resource={"service.version": "1.0.0"})
+    AgentLog.bootstrap(config=config, sink=otlp_sink)
+    AgentLog.child({"user_id": "u-1234"}).info(
+        "Invoice generated", payload={"invoice_id": "INV-9", "amount": 199}
+    )
+    record_network_request("GET", "https://api.example.com/orders", 200, 14)
+    AgentLog.record_auto(
+        "db_query",
+        "SELECT: SELECT * FROM orders WHERE id = ?",
+        payload={
+            "operation": "SELECT",
+            "statement": "SELECT * FROM orders WHERE id = ?",
+            "db_system": "postgresql",
+            "duration_ms": 3,
+        },
+    )
+    otlp_batch = otlp_sink.drain()
+    print("OTLP logs :", to_otlp_json(otlp_batch["logs"])[:320], "...")
+    print("OTLP spans:", to_otlp_json(otlp_batch["traces"])[:320], "...")
 
     # 默认不触发崩溃演示，使示例在 CI 中以退出码 0 正常结束（防退化）。
     # 想演示 crash handler 捕获未捕获异常时，运行：

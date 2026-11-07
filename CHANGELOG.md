@@ -20,5 +20,10 @@ Schema v1 (frozen 2026-11-02).
 - Sinks: `FileSink` (JSONL to `<export_directory>/agent-log.jsonl`) and `MemorySink` (tests).
 - `LoggingConfig.from_json` (hand-rolled parser) with documented defaults + override.
 - `install_crash_handler()` auto-instrumentation via `sys.excepthook` → `record_auto("crash", …)`.
+- OTLP export adapter (`agentlog/otlp.py`): Schema v1 events → OTLP/JSON — one
+  `LogRecord` per event plus a `SPAN_KIND_CLIENT` span for `network_request`
+  (HTTP semconv) and `db_query` (Database semconv); deterministic trace/span ids;
+  `OTLPSink` buffers events for `/v1/logs` + `/v1/traces` POSTs. Stdlib only.
+- `EventType.DB_QUERY` (`"db_query"`) added for parity with the Go/Java SDKs.
 - C7 `SchemaTests` validating every emitted line against Schema v1.
 - Build/test tooling: `pyproject.toml`, CI (`actions/setup-python` 3.11 + unittest), docs, LICENSE (MIT).

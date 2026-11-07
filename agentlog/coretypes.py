@@ -45,11 +45,12 @@ class EventType:
     NETWORK_REQUEST = "network_request"
     CRASH = "crash"
     HANG = "hang"
+    DB_QUERY = "db_query"
 
     # manual logging
     LOG = "log"
 
-    AUTO_TYPES = {SCREEN_VIEW, UI_INTERACTION, NETWORK_REQUEST, CRASH, HANG}
+    AUTO_TYPES = {SCREEN_VIEW, UI_INTERACTION, NETWORK_REQUEST, CRASH, HANG, DB_QUERY}
 
 
 # --------------------------------------------------------------------------- #

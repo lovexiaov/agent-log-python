@@ -53,7 +53,7 @@ read-only alias that is **never written** — it normalizes to `warn` on read.
 
 Required top-level keys: `ts, level, service, event_type, session_id, agent_auto, message`.
 Optional: `subsystem, category, env, user_id, trace_id, payload`. No other keys allowed.
-Manual logs use `event_type="log"`; auto events use `network_request | crash | hang | screen_view | ui_interaction`.
+Manual logs use `event_type="log"`; auto events use `network_request | db_query | crash | hang | screen_view | ui_interaction`.
 
 ### Configuration (`LoggingConfig.from_json`)
 
@@ -75,6 +75,45 @@ install_crash_handler()  # sys.excepthook -> record_auto("crash", ...) with stac
 
 Crash handlers, signal handlers, or a context-manager can be plugged in; any of
 them should call `record_auto(...)` so the event carries `agent_auto: true`.
+
+### OTLP export (OpenTelemetry)
+
+`agentlog.otlp` translates already-emitted Schema v1 events into **OTLP/JSON**,
+so they can be shipped to any OpenTelemetry-compatible backend (Jaeger, Tempo,
+Loki, Grafana, Datadog …) without changing the wire format.
+
+```python
+from agentlog import OTLPSink, to_otlp_json
+from agentlog.otlp import to_otlp
+
+sink = OTLPSink(extra_resource={"service.version": "1.2.0"})
+AgentLog.bootstrap(config=config, sink=sink)
+
+AgentLog.info("checkout started", payload={"cart_size": 3})
+record_network_request("GET", "https://api.example.com/orders", 200, 14)  # -> CLIENT span
+
+batch = sink.drain()                       # or: to_otlp(jsonl_lines)
+logs_body = to_otlp_json(batch["logs"])    # POST to <collector>/v1/logs
+traces_body = to_otlp_json(batch["traces"])# POST to <collector>/v1/traces
+```
+
+Mapping contract (details in `docs/logging-framework/OTLP-MAPPING.md`):
+
+| agent-log | OTLP |
+| --- | --- |
+| every event | one `LogRecord` |
+| `level` | `severityNumber` 1/5/9/13/17/21 (`critical` → `FATAL`) |
+| `service` / `env` / `session_id` | resource `service.name` / `deployment.environment` / `session.id` |
+| `trace_id` | `traceId` (32-hex; opaque values hashed deterministically) |
+| `event_type` / `agent_auto` / `subsystem` / `category` | attributes `agent.event.type` / `agent.auto` / `agent.subsystem` / `agent.category` |
+| `user_id` | `enduser.id` |
+| `payload.*` | `payload.<key>` attributes (ints as strings per proto3 JSON) |
+| `network_request` | + `SPAN_KIND_CLIENT` span (`http.request.method`, `url.full`, `http.response.status_code`) |
+| `db_query` | + `SPAN_KIND_CLIENT` span (`db.system`, `db.operation`, `db.statement`) |
+| `crash` / `hang` | LogRecord + `exception.type` / `exception.message` / `exception.stacktrace` |
+
+Ids are **deterministic** (SHA-256 derived), so re-exporting the same event
+yields the same `traceId`/`spanId` and retries stay idempotent.
 
 ## Run tests
 
