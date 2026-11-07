@@ -60,10 +60,26 @@ def main():
     # OTLP/JSON bodies to POST to a Collector (/v1/logs and /v1/traces).
     otlp_sink = OTLPSink(extra_resource={"service.version": "1.0.0"})
     AgentLog.bootstrap(config=config, sink=otlp_sink)
-    AgentLog.child({"user_id": "u-1234"}).info(
-        "Invoice generated", payload={"invoice_id": "INV-9", "amount": 199}
+
+    # Schema v1.1: bind trace_id + span_id on a child logger so every event
+    # emitted inside the operation shares one span (and one OTLP spanId).
+    span = AgentLog.child({
+        "trace_id": "0123456789abcdef0123456789abcdef",
+        "span_id": "a1b2c3d4e5f60718",
+        "user_id": "u-1234",
+    })
+    span.info("Invoice generated", payload={"invoice_id": "INV-9", "amount": 199})
+    span.record_auto(
+        "network_request",
+        "GET https://api.example.com/orders -> 200",
+        payload={
+            "method": "GET",
+            "url": "https://api.example.com/orders",
+            "status_code": 200,
+            "duration_ms": 14,
+        },
     )
-    record_network_request("GET", "https://api.example.com/orders", 200, 14)
+    # No span_id bound here: the exporter derives a deterministic one.
     AgentLog.record_auto(
         "db_query",
         "SELECT: SELECT * FROM orders WHERE id = ?",

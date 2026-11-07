@@ -49,11 +49,24 @@ Module-level facade (`agentlog`):
 `trace | debug | info | warn | error | critical` (6, lowercase). `warning` is a
 read-only alias that is **never written** — it normalizes to `warn` on read.
 
-### Wire format (Schema v1)
+### Wire format (Schema v1.1)
 
 Required top-level keys: `ts, level, service, event_type, session_id, agent_auto, message`.
-Optional: `subsystem, category, env, user_id, trace_id, payload`. No other keys allowed.
+Optional: `subsystem, category, env, user_id, trace_id, span_id, payload`. No other keys allowed.
 Manual logs use `event_type="log"`; auto events use `network_request | db_query | crash | hang | screen_view | ui_interaction`.
+
+`span_id` (v1.1) is 16 lowercase hex chars (8 bytes), the same shape as the W3C
+`traceparent` span-id. Bind it on a child logger so every event emitted inside an
+operation shares one span — and, when exported to OTLP, one `spanId`:
+
+```python
+span = AgentLog.child({"trace_id": "0123…", "span_id": "a1b2c3d4e5f60718"})
+span.info("invoice generated")              # -> span_id: a1b2c3d4e5f60718
+span.record_auto("network_request", "GET /orders -> 200", payload={...})
+```
+
+A malformed `span_id` is dropped (never written), so a bad value can't produce a
+schema-violating line; exporters then derive one deterministically.
 
 ### Configuration (`LoggingConfig.from_json`)
 
@@ -105,6 +118,7 @@ Mapping contract (details in `docs/logging-framework/OTLP-MAPPING.md`):
 | `level` | `severityNumber` 1/5/9/13/17/21 (`critical` → `FATAL`) |
 | `service` / `env` / `session_id` | resource `service.name` / `deployment.environment` / `session.id` |
 | `trace_id` | `traceId` (32-hex; opaque values hashed deterministically) |
+| `span_id` | `spanId` (used verbatim when valid; derived only when absent) |
 | `event_type` / `agent_auto` / `subsystem` / `category` | attributes `agent.event.type` / `agent.auto` / `agent.subsystem` / `agent.category` |
 | `user_id` | `enduser.id` |
 | `payload.*` | `payload.<key>` attributes (ints as strings per proto3 JSON) |
@@ -112,8 +126,9 @@ Mapping contract (details in `docs/logging-framework/OTLP-MAPPING.md`):
 | `db_query` | + `SPAN_KIND_CLIENT` span (`db.system`, `db.operation`, `db.statement`) |
 | `crash` / `hang` | LogRecord + `exception.type` / `exception.message` / `exception.stacktrace` |
 
-Ids are **deterministic** (SHA-256 derived), so re-exporting the same event
-yields the same `traceId`/`spanId` and retries stay idempotent.
+Ids are **deterministic**: an event's own `span_id` (Schema v1.1) is used verbatim;
+otherwise ids are SHA-256 derived, so re-exporting the same event yields the same
+`traceId`/`spanId` and retries stay idempotent.
 
 ## Run tests
 

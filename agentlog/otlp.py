@@ -38,6 +38,7 @@ import hashlib
 import json
 import re
 
+from agentlog.coretypes import normalize_span_id
 from agentlog.level import Level
 from agentlog.sink import Sink
 
@@ -94,9 +95,9 @@ _HTTP_METHOD_KEYS = ("method", "http_method", "http.method")
 _URL_KEYS = ("url", "url_full", "url.full")
 _STATUS_KEYS = ("status_code", "status", "statusCode", "http.status_code")
 _DURATION_KEYS = ("duration_ms", "durationMs", "duration")
-#: The three server implementations currently disagree on the SQL key
-#: (Go: ``query``, Java: ``sql``, docs: ``statement``). Accept all of them
-#: until the payload vocabulary is unified across the six SDKs.
+#: The canonical SQL key is ``statement`` (unified across the six SDKs in
+#: Schema v1.1). ``sql`` / ``query`` are accepted on **read** only, so that
+#: events already written by older Go/Java builds still map correctly.
 _SQL_KEYS = ("statement", "sql", "query")
 _DB_SYSTEM_KEYS = ("db_system", "db.system", "system")
 _DB_OPERATION_KEYS = ("operation", "op")
@@ -220,7 +221,16 @@ def trace_id_hex(event):
 
 
 def span_id_hex(event):
-    """Deterministically derive the 16-hex-char OTLP ``spanId`` for an event."""
+    """Return the 16-hex-char OTLP ``spanId`` for an event.
+
+    Since Schema v1.1 an event may carry its own ``span_id``; when present and
+    valid it is used verbatim, so the log record and the span point at the same
+    real span. Otherwise the id is derived deterministically from the event
+    (idempotent across retries).
+    """
+    explicit = normalize_span_id(event.get("span_id"))
+    if explicit:
+        return explicit
     seed = "|".join(
         [
             "agentlog:span",
@@ -354,9 +364,13 @@ def event_to_log_record(event):
     trace_id = trace_id_hex(event)
     if trace_id:
         record["traceId"] = trace_id
-        # Only operations that also produce a span share the span id, so log
-        # records never point at a span id that does not exist.
-        if _span_kind(event) is not None:
+        # Prefer the event's own (Schema v1.1) span id — it points at a real
+        # span. Otherwise only operation events get an id, matching the span
+        # emitted for them, so a log record never references a missing span.
+        explicit_span = normalize_span_id(event.get("span_id"))
+        if explicit_span:
+            record["spanId"] = explicit_span
+        elif _span_kind(event) is not None:
             record["spanId"] = span_id_hex(event)
     return record
 

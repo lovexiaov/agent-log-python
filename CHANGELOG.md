@@ -25,5 +25,10 @@ Schema v1 (frozen 2026-11-02).
   (HTTP semconv) and `db_query` (Database semconv); deterministic trace/span ids;
   `OTLPSink` buffers events for `/v1/logs` + `/v1/traces` POSTs. Stdlib only.
 - `EventType.DB_QUERY` (`"db_query"`) added for parity with the Go/Java SDKs.
+- Schema v1.1: optional top-level `span_id` (16 lowercase hex chars, same shape as
+  the W3C `traceparent` span-id). Bind it via `child({"span_id": …})` so all events
+  of one operation share a span; malformed values are dropped instead of written.
+- `db_query` payload vocabulary unified across SDKs: the SQL text is now `statement`
+  (Go wrote `query`, Java `sql`); legacy keys are still accepted on read.
 - C7 `SchemaTests` validating every emitted line against Schema v1.
 - Build/test tooling: `pyproject.toml`, CI (`actions/setup-python` 3.11 + unittest), docs, LICENSE (MIT).

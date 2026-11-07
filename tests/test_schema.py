@@ -19,7 +19,8 @@ from agentlog.sink import MemorySink
 
 ALLOWED = {
     "ts", "level", "service", "event_type", "session_id", "agent_auto",
-    "message", "subsystem", "category", "env", "user_id", "trace_id", "payload",
+    "message", "subsystem", "category", "env", "user_id", "trace_id", "span_id",
+    "payload",
 }
 REQUIRED = {"ts", "level", "service", "event_type", "session_id", "agent_auto", "message"}
 LEVELS = {"trace", "debug", "info", "warn", "error", "critical"}
@@ -69,6 +70,9 @@ def assert_conforms(self, line):
     # 9. payload is dict if present
     if "payload" in L:
         self.assertIsInstance(L["payload"], dict, "payload must be object")
+    # 9b. span_id (Schema v1.1) must be 16 lowercase hex chars
+    if "span_id" in L:
+        self.assertRegex(L["span_id"], r"^[0-9a-f]{16}$", "bad span_id: %r" % L.get("span_id"))
     # 10. ts looks like RFC3339
     self.assertRegex(L["ts"], r"T", "ts missing 'T'")
     self.assertRegex(L["ts"], RFC3339_RE, "ts not RFC3339-like: %r" % L.get("ts"))
@@ -142,6 +146,26 @@ class SchemaTests(unittest.TestCase):
         L = assert_conforms(self, lines[0])
         self.assertTrue(L["agent_auto"])
         self.assertEqual(L["event_type"], "crash")
+
+    def test_span_id_is_emitted_when_bound(self):
+        logger, sink = make_logger(min_level="info")
+        child = logger.child({"span_id": "a1b2c3d4e5f60718"})
+        child.info("inside span")
+        L = assert_conforms(self, sink.lines()[0])
+        self.assertEqual(L["span_id"], "a1b2c3d4e5f60718")
+
+    def test_span_id_is_normalized_to_lowercase(self):
+        logger, sink = make_logger(min_level="info")
+        logger.child({"span_id": "A1B2C3D4E5F60718"}).info("upper span")
+        L = assert_conforms(self, sink.lines()[0])
+        self.assertEqual(L["span_id"], "a1b2c3d4e5f60718")
+
+    def test_invalid_span_id_is_dropped(self):
+        # A malformed span id must never produce a schema-violating line.
+        logger, sink = make_logger(min_level="info")
+        logger.child({"span_id": "not-a-span"}).info("bad span")
+        L = assert_conforms(self, sink.lines()[0])
+        self.assertNotIn("span_id", L)
 
     def test_child_isolation_parent_unchanged(self):
         logger, sink = make_logger(min_level="info")

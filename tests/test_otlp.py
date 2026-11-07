@@ -136,6 +136,57 @@ class IdTest(unittest.TestCase):
         self.assertNotIn("traceId", record)
         self.assertNotIn("spanId", record)
 
+    def test_explicit_span_id_is_used_verbatim(self):
+        # Schema v1.1: an event's own span_id wins over the derived one, so the
+        # log record and the emitted span point at the same real span.
+        event = make_event(
+            event_type="network_request",
+            trace_id="0123456789abcdef0123456789abcdef",
+            span_id="a1b2c3d4e5f60718",
+            payload={"method": "GET", "url": "https://api.example.com/x"},
+        )
+        record = event_to_log_record(event)
+        span = event_to_span(event)
+        self.assertEqual(record["spanId"], "a1b2c3d4e5f60718")
+        self.assertEqual(span["spanId"], "a1b2c3d4e5f60718")
+
+    def test_explicit_span_id_is_lowercased(self):
+        event = make_event(span_id="A1B2C3D4E5F60718", trace_id="trace-1")
+        self.assertEqual(event_to_log_record(event)["spanId"], "a1b2c3d4e5f60718")
+
+    def test_span_id_without_trace_is_not_attached_to_record(self):
+        # A spanId without a traceId is meaningless for OTLP; the span itself
+        # still gets a synthetic session trace.
+        event = make_event(
+            event_type="network_request",
+            span_id="a1b2c3d4e5f60718",
+            payload={"method": "GET", "url": "https://api.example.com/x"},
+        )
+        record = event_to_log_record(event)
+        self.assertNotIn("spanId", record)
+        span = event_to_span(event)
+        self.assertEqual(span["spanId"], "a1b2c3d4e5f60718")
+        self.assertEqual(len(span["traceId"]), 32)
+
+    def test_invalid_span_id_falls_back_to_derived(self):
+        event = make_event(
+            event_type="network_request",
+            trace_id="0123456789abcdef0123456789abcdef",
+            span_id="not-a-span-id",
+            payload={"method": "GET", "url": "https://api.example.com/x"},
+        )
+        span_id = event_to_log_record(event)["spanId"]
+        self.assertEqual(len(span_id), 16)
+        int(span_id, 16)
+        self.assertNotEqual(span_id, "not-a-span-id")
+
+    def test_plain_log_with_explicit_span_id_carries_it(self):
+        # A manual log emitted inside a known span should reference that span.
+        record = event_to_log_record(
+            make_event(trace_id="trace-1", span_id="a1b2c3d4e5f60718")
+        )
+        self.assertEqual(record["spanId"], "a1b2c3d4e5f60718")
+
 
 class ResourceTest(unittest.TestCase):
     def test_resource_attributes(self):
@@ -273,32 +324,51 @@ class SpanTest(unittest.TestCase):
         self.assertEqual(span["status"]["code"], STATUS_CODE_ERROR)
         self.assertEqual(scalar_map(span)["error.type"], "503")
 
-    def test_db_query_span_accepts_all_payload_variants(self):
-        # Go emits `query`, Java emits `sql`, the mapping doc says `statement`.
-        for key in ("statement", "sql", "query"):
+    def test_db_query_span_uses_statement(self):
+        span = event_to_span(
+            make_event(
+                event_type=EventType.DB_QUERY,
+                agent_auto=True,
+                payload={
+                    "operation": "SELECT",
+                    "statement": "SELECT * FROM users WHERE id = ?",
+                    "db_system": "postgresql",
+                    "duration_ms": 3,
+                },
+            )
+        )
+        attrs = scalar_map(span)
+        self.assertEqual(attrs["db.statement"], "SELECT * FROM users WHERE id = ?")
+        self.assertEqual(attrs["db.operation"], "SELECT")
+        self.assertEqual(attrs["db.system"], "postgresql")
+        self.assertNotIn("error.type", attrs)
+
+    def test_db_query_span_reads_legacy_sql_and_query_keys(self):
+        # Pre-v1.1 Go/Java builds wrote `query` / `sql`; read-side compatibility
+        # keeps historical JSONL mappable. Writers must use `statement`.
+        for key in ("sql", "query"):
             span = event_to_span(
                 make_event(
                     event_type=EventType.DB_QUERY,
-                    agent_auto=True,
-                    payload={
-                        "operation": "SELECT",
-                        key: "SELECT * FROM users WHERE id = ?",
-                        "db_system": "postgresql",
-                        "duration_ms": 3,
-                    },
+                    payload={"operation": "SELECT", key: "SELECT 1"},
                 )
             )
-            attrs = scalar_map(span)
-            self.assertEqual(attrs["db.statement"], "SELECT * FROM users WHERE id = ?", key)
-            self.assertEqual(attrs["db.operation"], "SELECT", key)
-            self.assertEqual(attrs["db.system"], "postgresql", key)
-            self.assertNotIn("error.type", attrs, key)
+            self.assertEqual(scalar_map(span)["db.statement"], "SELECT 1", key)
+
+    def test_statement_wins_over_legacy_keys(self):
+        span = event_to_span(
+            make_event(
+                event_type=EventType.DB_QUERY,
+                payload={"statement": "canonical", "sql": "legacy-sql", "query": "legacy-query"},
+            )
+        )
+        self.assertEqual(scalar_map(span)["db.statement"], "canonical")
 
     def test_db_query_error(self):
         span = event_to_span(
             make_event(
                 event_type=EventType.DB_QUERY,
-                payload={"operation": "INSERT", "sql": "INSERT ...", "error": "unique violation"},
+                payload={"operation": "INSERT", "statement": "INSERT ...", "error": "unique violation"},
             )
         )
         self.assertEqual(scalar_map(span)["error.type"], "unique violation")
@@ -318,7 +388,7 @@ class SpanTest(unittest.TestCase):
             make_event(event_type="network_request", payload={"method": "GET", "url": "https://a"})
         )
         second = event_to_span(
-            make_event(event_type="db_query", payload={"operation": "SELECT", "sql": "SELECT 1"})
+            make_event(event_type="db_query", payload={"operation": "SELECT", "statement": "SELECT 1"})
         )
         self.assertEqual(len(first["traceId"]), 32)
         self.assertEqual(first["traceId"], second["traceId"], "same session -> same synthetic trace")

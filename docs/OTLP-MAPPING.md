@@ -11,7 +11,7 @@ agent-log 与 OTel 不是竞争关系，而是**两层**：
 - **agent-log**：跨端统一、Agent 优先、隐私默认安全的**事件源**，线格式是 Schema v1 JSONL（封闭顶层、6 档 level、`payload` 收敛）。
 - **OTel/OTLP**：观测数据的**传输/后端标准**。Collector 收到 OTLP 后可发往 Jaeger / Tempo / Loki / Grafana / Datadog 等。
 
-因此 OTLP 适配是**单向翻译层**（export-only）：不改变 Schema v1，不要求业务改用 OTel SDK，也不把 OTel 的概念（如 `span_id`）反向塞进线格式。
+因此 OTLP 适配是**单向翻译层**（export-only）：不要求业务改用 OTel SDK，也不引入 OTel SDK/Collector 依赖。Schema v1.1 仅从 OTel 借用 `span_id` 这**一个标识符字段**（16 位小写 hex，与 W3C `traceparent` 的 span-id 同构），目的是让日志行与链路节点能精确对齐；其余 OTel 概念（resource / scope / span kind 等）不进入线格式。
 
 ## 2. 总原则
 
@@ -20,7 +20,7 @@ agent-log 与 OTel 不是竞争关系，而是**两层**：
    - `network_request` → `SPAN_KIND_CLIENT`，套 HTTP 语义约定；
    - `db_query` → `SPAN_KIND_CLIENT`，套 Database 语义约定。
 3. **其余事件不发 span**：`log` / `ui_interaction` / `screen_view` 不是"调用跨度"，`crash` / `hang` 留在 logs 信号（附 `exception.*` 属性）。
-4. **id 必须确定性派生**（见 §6）：同一事件重复导出得到同一 `traceId`/`spanId`，重试与重放幂等。
+4. **id 优先透传、缺失才派生**（见 §6）：事件自带合法 `span_id` 时原样使用；缺失时确定性派生，保证同一事件重复导出得到同一 `traceId`/`spanId`，重试与重放幂等。
 5. **OTLP 是传输格式，不是存储格式**：`payload` 展平后作为属性发送，不做二次脱敏——脱敏已在 logger 层完成（C6）。
 
 ## 3. 事件 → LogRecord
@@ -40,7 +40,8 @@ agent-log 与 OTel 不是竞争关系，而是**两层**：
 | `category` | attribute `agent.category` | 同上 |
 | `user_id` | attribute `enduser.id` | 语义约定中的间接标识 |
 | `payload.<k>` | attribute `payload.<k>` | 逐键展平，类型见 §5 |
-| （无对应） | `spanId` | 仅当该事件同时产出 span 时写入（§7） |
+| `span_id` | `spanId` | Schema v1.1 可选字段；合法（16 位小写 hex）时原样透传，缺失才派生（§6）；无 `trace_id` 时不写入 |
+| （派生） | `spanId` | 仅当该事件同时产出 span 且未自带 `span_id` 时派生（§7） |
 
 补充：`crash` / `hang` 额外从 `payload` 提取
 
@@ -82,18 +83,20 @@ agent-log 与 OTel 不是竞争关系，而是**两层**：
 
 ## 6. id 规则（确定性）
 
-Schema v1 的 `trace_id` 只要求"与 traceparent 同源的不透明字符串"，未约束格式；OTLP 要求 `traceId` = 16 字节、`spanId` = 8 字节。适配器据此派生：
+Schema v1 的 `trace_id` 只要求"与 traceparent 同源的不透明字符串"，未约束格式；OTLP 要求 `traceId` = 16 字节、`spanId` = 8 字节。Schema v1.1 起事件可自带 `span_id`（16 位小写 hex，8 字节），**优先使用事件自带值**，仅在缺失时派生：
 
 | 场景 | 规则 |
 | --- | --- |
+| 事件自带合法 `span_id`（v1.1） | 原样使用（大写归一为小写）；LogRecord 与 span 共用该 id |
 | `trace_id` 是 32 位 hex | 原样转小写使用 |
 | `trace_id` 是其他字符串 | `sha256("agentlog:trace:" + raw)[:32]` |
-| 事件无 `trace_id` | LogRecord **不带** `traceId`；若该事件要发 span，则用 `sha256("agentlog:session:" + session_id)[:32]` 作为该会话的合成 trace |
-| `spanId` | `sha256("agentlog:span:" + session_id + trace_id + event_type + ts + message)[:16]` |
+| 事件无 `trace_id` | LogRecord **不带** `traceId`/`spanId`；若该事件要发 span，则用 `sha256("agentlog:session:" + session_id)[:32]` 作为该会话的合成 trace |
+| `span_id` 缺失或非法 | `sha256("agentlog:span:" + session_id + trace_id + event_type + ts + message)[:16]` |
 
 要点：
 
 - **不引入随机性**：重放/重试不会产生重复 span。
+- **自带 span_id 优先**：埋点方在操作开始时生成 span_id 并绑定到 logger（如 `logger.child({"trace_id": ..., "span_id": ...})`），该操作内所有事件与导出的 span 共享同一 id，Agent 能据此把"日志行"和"链路节点"精确对上。
 - **同一会话无 trace 的多个 span 归入同一条合成 trace**，而不是每个 span 一条 trace（后者在 Jaeger 里会变成大量孤立单 span 链路）。
 - `traceId`/`spanId` 在 OTLP/JSON 中是 **hex 字符串**（OTLP 对这两个字段的 JSON 表示是 hex，而非 protobuf 通用的 base64）——这是规范特例，务必不要按 base64 处理。
 
@@ -121,12 +124,11 @@ Schema v1 的 `trace_id` 只要求"与 traceparent 同源的不透明字符串"�
 - `name`：`"<operation> <statement>"`
 - `kind`：`SPAN_KIND_CLIENT`（3）
 - 时间窗同 7.1（`duration_ms`）
-- 属性：`db.system`（`db_system`/`system`）、`db.operation`（`operation`/`op`）、`db.statement`（`statement`/`sql`/`query`）、失败时 `error.type`。
+- 属性：`db.system`（`db_system`/`system`）、`db.operation`（`operation`/`op`）、`db.statement`（**规范键 `statement`**）、失败时 `error.type`。
 
-> ⚠️ **已知跨端不一致**：`db_query` 的 SQL 键目前 Go 写 `query`、Java 写 `sql`、本规范原文写 `statement`。
-> 适配器**同时接受三种键**（优先级 `statement > sql > query`）以兼容现状；
-> 这不改变"字段名逐字相同"的 C2 约束——`payload` 内部键属于业务/埋点自定义范围，但**同一语义不应有三种写法**。
-> 建议在下一轮统一为 `statement`，并同步 Go/Java 埋点实现（记入待办）。
+> **payload 词表（v1.1 起统一）**：`db_query` 的 SQL 文本在六端一律写入 **`statement`**。
+> 历史数据里 Go 的 `query`、Java 的 `sql` 仍出现在旧 JSONL 中，适配器**只在读取侧**兼容（优先级 `statement > sql > query`），
+> 写入侧禁止再产出 `query`/`sql`。详见 `README.md` §3.5「payload 标准词表」。
 
 ## 8. Resource 与批次组织
 
@@ -145,7 +147,7 @@ Schema v1 的 `trace_id` 只要求"与 traceparent 同源的不透明字符串"�
 
 | 端 | 状态 | 入口 |
 | --- | --- | --- |
-| Python | ✅ 已实现（v1.0.0） | `agentlog/otlp.py`：`to_otlp` / `to_otlp_logs` / `to_otlp_spans` / `event_to_log_record` / `event_to_span` / `OTLPSink` |
+| Python | ✅ 已实现（v1.0.0；支持 Schema v1.1 `span_id` 透传） | `agentlog/otlp.py`：`to_otlp` / `to_otlp_logs` / `to_otlp_spans` / `event_to_log_record` / `event_to_span` / `OTLPSink` |
 | Go | ⬜ 待实现 | — |
 | Java | ⬜ 待实现 | — |
 | Web / TS | ⬜ 待实现 | — |

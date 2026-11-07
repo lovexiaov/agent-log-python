@@ -8,7 +8,7 @@ from agentlog.redactor import Redactor
 # Reserved top-level context keys mapped from (possibly camelCase) input.
 # session_id is deliberately NOT overridable via child(): it stays stable
 # for the whole process.
-_CONTEXT_STRINGS = ("subsystem", "category", "env", "user_id", "trace_id")
+_CONTEXT_STRINGS = ("subsystem", "category", "env", "user_id", "trace_id", "span_id")
 
 
 def _normalize_key(key: str) -> str:
@@ -21,6 +21,8 @@ def _normalize_key(key: str) -> str:
         "user_id": "user_id",
         "traceid": "trace_id",
         "trace_id": "trace_id",
+        "spanid": "span_id",
+        "span_id": "span_id",
         "sessionid": "session_id",
         "session_id": "session_id",
     }
@@ -91,6 +93,7 @@ class Logger:
             user_id=ctx.get("user_id"),
             trace_id=trace_id if trace_id is not None else ctx.get("trace_id"),
             payload=payload,
+            span_id=ctx.get("span_id"),
         )
 
     # -- emit -------------------------------------------------------------- #

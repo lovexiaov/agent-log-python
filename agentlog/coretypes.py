@@ -1,6 +1,7 @@
 """Shared core types: stable session id, event types, auto-instrumentation."""
 
 import datetime
+import re
 import threading
 import traceback
 import uuid
@@ -31,6 +32,30 @@ def now_iso() -> str:
     """Current UTC time as ``YYYY-MM-DDThh:mm:ss.SSSZ``."""
     dt = datetime.datetime.now(datetime.timezone.utc)
     return dt.strftime("%Y-%m-%dT%H:%M:%S.") + "%03dZ" % (dt.microsecond // 1000)
+
+
+# --------------------------------------------------------------------------- #
+# Span id (Schema v1.1, optional)
+# --------------------------------------------------------------------------- #
+#: 16 lowercase hex chars = 8 bytes, same shape as the W3C traceparent span-id.
+_SPAN_ID_RE = re.compile(r"^[0-9a-f]{16}$")
+
+
+def is_valid_span_id(value) -> bool:
+    """Return True if ``value`` is a Schema v1.1 ``span_id``."""
+    return isinstance(value, str) and _SPAN_ID_RE.match(value) is not None
+
+
+def normalize_span_id(value):
+    """Render ``value`` as a canonical lowercase span id, or ``None``.
+
+    Non-conforming values are reported as ``None`` instead of raising: a bad
+    span id must never make an event un-serializable or violate the schema.
+    """
+    if not isinstance(value, str):
+        return None
+    lowered = value.lower()
+    return lowered if _SPAN_ID_RE.match(lowered) else None
 
 
 # --------------------------------------------------------------------------- #
