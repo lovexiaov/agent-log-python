@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from agentlog import AgentLog, LoggingConfig
 from agentlog.coretypes import install_crash_handler
+from agentlog import record_network_request, instrument_requests
 
 
 def main():
@@ -44,6 +45,12 @@ def main():
 
     # Automatic instrumentation: uncaught exceptions become agent_auto crash events
     install_crash_handler()
+
+    # Automatic instrumentation: HTTP (event_type = network_request). In production
+    # call instrument_requests() once at startup to patch requests.Session.send;
+    # here we emit one directly via the building block (no third-party dependency).
+    record_network_request("GET", "https://api.example.com/orders", 200, 14)
+    # instrument_requests() is a no-op when `requests` is not installed.
 
     print("Export path:", AgentLog.export_path())
 

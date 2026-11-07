@@ -29,6 +29,7 @@ from agentlog.agentlog import (
 )
 from agentlog.config import LoggingConfig
 from agentlog.coretypes import EventType, get_session_id, install_crash_handler
+from agentlog.instrumentation import instrument_requests, record_network_request
 from agentlog.json import dumps, loads
 from agentlog.level import Level
 from agentlog.logger import Logger
@@ -57,6 +58,8 @@ __all__ = [
     "loads",
     "install_crash_handler",
     "get_session_id",
+    "instrument_requests",
+    "record_network_request",
     # facade convenience
     "bootstrap",
     "instance",
