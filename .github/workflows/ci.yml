@@ -8,7 +8,7 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - name: Set up Python 3.11
@@ -19,3 +19,6 @@ jobs:
         run: python3 -m py_compile agentlog/*.py
       - name: Run tests
         run: python3 -m unittest discover -s tests -v
+
+      - name: Run example
+        run: python3 example/main.py

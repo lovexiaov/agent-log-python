@@ -47,9 +47,12 @@ def main():
 
     print("Export path:", AgentLog.export_path())
 
-    # Triggering an uncaught exception to demonstrate the crash handler.
-    # (sys.excepthook writes a crash event before the process exits.)
-    raise RuntimeError("something went wrong in the billing pipeline")
+    # 默认不触发崩溃演示，使示例在 CI 中以退出码 0 正常结束（防退化）。
+    # 想演示 crash handler 捕获未捕获异常时，运行：
+    #   AGENTLOG_DEMO_CRASH=1 python3 example/main.py
+    if os.environ.get("AGENTLOG_DEMO_CRASH") == "1":
+        # sys.excepthook 会在进程退出前写入一条 crash 事件。
+        raise RuntimeError("something went wrong in the billing pipeline")
 
 
 if __name__ == "__main__":
