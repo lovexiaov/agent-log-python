@@ -12,7 +12,8 @@ import sys
 # Session: one stable id per process
 # --------------------------------------------------------------------------- #
 #: A single stable session id for the whole process. Generated exactly once.
-SESSION_ID = str(uuid.uuid4())
+#: 32 lowercase hex chars, so ``trace_id = session_id`` is always Schema-valid.
+SESSION_ID = uuid.uuid4().hex
 
 
 def get_session_id() -> str:
@@ -22,7 +23,38 @@ def get_session_id() -> str:
 
 def new_session_id() -> str:
     """Generate a fresh session id (used for tests / explicit resets)."""
-    return str(uuid.uuid4())
+    return uuid.uuid4().hex
+
+
+# --------------------------------------------------------------------------- #
+# Trace id (Schema v1.2): 32 lowercase hex chars = 8 bytes, same shape as the
+# W3C traceparent trace-id and the OTLP traceId.
+# --------------------------------------------------------------------------- #
+_TRACE_ID_RE = re.compile(r"^[0-9a-f]{32}$")
+
+
+def new_trace_id() -> str:
+    """Generate a fresh Schema-valid trace id (uuid4 without hyphens)."""
+    return uuid.uuid4().hex
+
+
+def is_valid_trace_id(value) -> bool:
+    """Return True if ``value`` is a Schema v1.2 ``trace_id``."""
+    return isinstance(value, str) and _TRACE_ID_RE.match(value) is not None
+
+
+def normalize_trace_id(value):
+    """Render ``value`` as a canonical lowercase trace id, or ``None``.
+
+    Uppercase hex is accepted and lowercased. Anything else yields ``None``:
+    a bad trace id must never make an event un-serializable or violate the
+    schema — the field is dropped and the event is written without trace
+    context (same policy as ``span_id``).
+    """
+    if not isinstance(value, str):
+        return None
+    lowered = value.lower()
+    return lowered if _TRACE_ID_RE.match(lowered) else None
 
 
 # --------------------------------------------------------------------------- #

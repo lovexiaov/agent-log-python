@@ -38,7 +38,7 @@ import hashlib
 import json
 import re
 
-from agentlog.coretypes import normalize_span_id
+from agentlog.coretypes import normalize_span_id, normalize_trace_id
 from agentlog.level import Level
 from agentlog.sink import Sink
 
@@ -107,7 +107,6 @@ _TS_RE = re.compile(
     r"^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})"
     r"(?:\.(\d+))?(Z|[+-]\d{2}:?\d{2})?$"
 )
-_HEX32_RE = re.compile(r"^[0-9a-fA-F]{32}$")
 
 
 # --------------------------------------------------------------------------- #
@@ -206,18 +205,12 @@ def _sha256_hex(text):
 def trace_id_hex(event):
     """Return the 32-hex-char OTLP ``traceId`` for an event, or ``None``.
 
-    Schema v1 only requires ``trace_id`` to be "opaque and traceparent-aligned";
-    it does not constrain the format. A 32-hex value is used verbatim;
-    anything else is hashed deterministically so that all events sharing the
-    same logical ``trace_id`` still land in the same OTLP trace.
+    Schema v1.2 constrains ``trace_id`` to 32 lowercase hex chars (uppercase
+    is normalized). Non-conforming values yield ``None`` — no hashing: since
+    v1.2 the write boundary drops them, so reaching this adapter they can
+    only come from hand-built dicts; those are treated as trace-less too.
     """
-    raw = event.get("trace_id")
-    if not raw:
-        return None
-    raw = str(raw)
-    if _HEX32_RE.match(raw):
-        return raw.lower()
-    return _sha256_hex("agentlog:trace:" + raw)[:32]
+    return normalize_trace_id(event.get("trace_id"))
 
 
 def span_id_hex(event):

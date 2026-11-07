@@ -7,7 +7,7 @@ appear.
 """
 
 from agentlog.json import dumps
-from agentlog.coretypes import normalize_span_id, now_iso
+from agentlog.coretypes import normalize_span_id, normalize_trace_id, now_iso
 
 
 class LogEvent:
@@ -68,8 +68,12 @@ class LogEvent:
             obj["env"] = self.env
         if self.user_id:
             obj["user_id"] = self.user_id
-        if self.trace_id:
-            obj["trace_id"] = self.trace_id
+        # Schema v1.2: only emit a trace_id that conforms (32 lowercase hex);
+        # uppercase is normalized, anything else is dropped rather than
+        # written as invalid data (same policy as span_id).
+        trace_id = normalize_trace_id(self.trace_id)
+        if trace_id:
+            obj["trace_id"] = trace_id
         # Schema v1.1: only emit a span_id that conforms (16 lowercase hex);
         # a malformed value is dropped rather than written as invalid data.
         span_id = normalize_span_id(self.span_id)

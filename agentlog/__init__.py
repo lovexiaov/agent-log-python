@@ -28,7 +28,12 @@ from agentlog.agentlog import (
     warning,
 )
 from agentlog.config import LoggingConfig
-from agentlog.coretypes import EventType, get_session_id, install_crash_handler
+from agentlog.coretypes import (
+    EventType,
+    get_session_id,
+    install_crash_handler,
+    new_trace_id,
+)
 from agentlog.instrumentation import instrument_requests, record_network_request
 from agentlog.json import dumps, loads
 from agentlog.level import Level
@@ -93,6 +98,7 @@ __all__ = [
     # facade convenience
     "bootstrap",
     "instance",
+    "new_trace_id",
     "info",
     "warn",
     "warning",

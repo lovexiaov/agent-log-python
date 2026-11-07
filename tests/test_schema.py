@@ -11,7 +11,14 @@ import sys
 import unittest
 
 from agentlog.agentlog import AgentLog, bootstrap, instance
-from agentlog.coretypes import EventType, install_crash_handler, uninstall_crash_handler
+from agentlog.coretypes import (
+    EventType,
+    get_session_id,
+    install_crash_handler,
+    new_session_id,
+    new_trace_id,
+    uninstall_crash_handler,
+)
 from agentlog.level import Level
 from agentlog.logger import Logger
 from agentlog.redactor import MASK, Redactor
@@ -166,6 +173,36 @@ class SchemaTests(unittest.TestCase):
         logger.child({"span_id": "not-a-span"}).info("bad span")
         L = assert_conforms(self, sink.lines()[0])
         self.assertNotIn("span_id", L)
+
+    def test_trace_id_is_emitted_when_bound(self):
+        logger, sink = make_logger(min_level="info")
+        tid = "0123456789abcdef0123456789abcdef"
+        logger.child({"trace_id": tid}).info("with trace")
+        L = assert_conforms(self, sink.lines()[0])
+        self.assertEqual(L["trace_id"], tid)
+
+    def test_trace_id_is_normalized_to_lowercase(self):
+        logger, sink = make_logger(min_level="info")
+        logger.child({"trace_id": "0123456789ABCDEF0123456789ABCDEF"}).info("upper trace")
+        L = assert_conforms(self, sink.lines()[0])
+        self.assertEqual(L["trace_id"], "0123456789abcdef0123456789abcdef")
+
+    def test_invalid_trace_id_is_dropped(self):
+        # Schema v1.2: a non-hex trace_id is dropped at the write boundary;
+        # the event itself is still written, just without trace context.
+        logger, sink = make_logger(min_level="info")
+        logger.child({"trace_id": "trace-abc"}).info("bad trace")
+        L = assert_conforms(self, sink.lines()[0])
+        self.assertNotIn("trace_id", L)
+
+    def test_default_session_id_is_schema_hex(self):
+        # v1.2: generated session ids are 32 lowercase hex so the natural
+        # binding trace_id = session_id is always schema-valid. (The shared
+        # test logger injects a fixed readable session id, so test the
+        # generator directly.)
+        self.assertRegex(new_session_id(), r"^[0-9a-f]{32}$")
+        self.assertRegex(get_session_id(), r"^[0-9a-f]{32}$")
+        self.assertRegex(new_trace_id(), r"^[0-9a-f]{32}$")
 
     def test_child_isolation_parent_unchanged(self):
         logger, sink = make_logger(min_level="info")

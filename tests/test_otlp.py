@@ -114,13 +114,11 @@ class IdTest(unittest.TestCase):
         tid = "0123456789abcdef0123456789abcdef"
         self.assertEqual(trace_id_hex(make_event(trace_id=tid.upper())), tid)
 
-    def test_opaque_trace_id_is_hashed_deterministically(self):
-        first = trace_id_hex(make_event(trace_id="trace-abc"))
-        second = trace_id_hex(make_event(trace_id="trace-abc"))
-        self.assertEqual(first, second)
-        self.assertEqual(len(first), 32)
-        int(first, 16)  # must be hex
-        self.assertNotEqual(first, trace_id_hex(make_event(trace_id="trace-xyz")))
+    def test_non_hex_trace_id_is_dropped(self):
+        # Schema v1.2: trace_id is 32 lowercase hex, nothing else. The adapter
+        # never invents ids — a non-conforming value is treated as trace-less.
+        for bad in ("trace-abc", "0123456789abcdef0123456789abcde", "ABC-123", 42, "0123456789abcdef0123456789abcdez"):
+            self.assertIsNone(trace_id_hex(make_event(trace_id=bad)), bad)
 
     def test_missing_trace_id_returns_none(self):
         self.assertIsNone(trace_id_hex(make_event()))
@@ -151,7 +149,9 @@ class IdTest(unittest.TestCase):
         self.assertEqual(span["spanId"], "a1b2c3d4e5f60718")
 
     def test_explicit_span_id_is_lowercased(self):
-        event = make_event(span_id="A1B2C3D4E5F60718", trace_id="trace-1")
+        event = make_event(
+            span_id="A1B2C3D4E5F60718", trace_id="0123456789abcdef0123456789abcdef"
+        )
         self.assertEqual(event_to_log_record(event)["spanId"], "a1b2c3d4e5f60718")
 
     def test_span_id_without_trace_is_not_attached_to_record(self):
@@ -183,7 +183,7 @@ class IdTest(unittest.TestCase):
     def test_plain_log_with_explicit_span_id_carries_it(self):
         # A manual log emitted inside a known span should reference that span.
         record = event_to_log_record(
-            make_event(trace_id="trace-1", span_id="a1b2c3d4e5f60718")
+            make_event(trace_id="0123456789abcdef0123456789abcdef", span_id="a1b2c3d4e5f60718")
         )
         self.assertEqual(record["spanId"], "a1b2c3d4e5f60718")
 
