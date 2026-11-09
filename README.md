@@ -49,10 +49,19 @@ Module-level facade (`agentlog`):
 `trace | debug | info | warn | error | critical` (6, lowercase). `warning` is a
 read-only alias that is **never written** — it normalizes to `warn` on read.
 
-### Wire format (Schema v1.2)
+### Wire format (Schema v1.3)
 
 Required top-level keys: `ts, level, service, event_type, session_id, agent_auto, message`.
-Optional: `subsystem, category, env, user_id, trace_id, span_id, payload`. No other keys allowed.
+Optional: `subsystem, category, env, release, user_id, trace_id, span_id, payload`. No other keys allowed.
+
+`release` (v1.3) is a **config-level** identifier (`LoggingConfig(release="1.4.2")` or
+`{"release": "1.4.2"}` in the config JSON) stamped on every event by the logger — semver,
+git sha or build number, ≤128 chars, no format validation. Omit it and the key is not written;
+when present it becomes `service.version` in the OTLP resource.
+
+Crash / hang payloads follow the v1.3 vocabulary: `exception` (type name),
+`exception_message`, `stack` (single string) and `mechanism`
+(`uncaught | handled | reported`).
 Manual logs use `event_type="log"`; auto events use `network_request | db_query | crash | hang | screen_view | ui_interaction`.
 
 `span_id` (v1.1) is 16 lowercase hex chars (8 bytes), the same shape as the W3C

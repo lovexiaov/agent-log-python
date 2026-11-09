@@ -33,7 +33,7 @@ class Logger:
     """A logger bound to a service, level, sink, redactor and scope context."""
 
     def __init__(self, service, min_level, context, sink, redactor, session_id,
-                 redact_enabled, env=None):
+                 redact_enabled, env=None, release=None):
         self.service = service
         self.min_level = min_level  # canonical level string (min threshold)
         self.context = dict(context)  # bound scope fields
@@ -42,6 +42,8 @@ class Logger:
         self.session_id = session_id
         self.redact_enabled = redact_enabled
         self.env = env
+        # Schema v1.3: release is stamped on every event at emit time.
+        self.release = release
 
     # -- configuration ---------------------------------------------------- #
     def set_level(self, level: str) -> None:
@@ -73,6 +75,7 @@ class Logger:
             session_id=self.session_id,
             redact_enabled=self.redact_enabled,
             env=self.env,
+            release=self.release,
         )
 
     # -- event construction ------------------------------------------------ #
@@ -90,6 +93,7 @@ class Logger:
             subsystem=ctx.get("subsystem"),
             category=category if category is not None else ctx.get("category"),
             env=self.env if self.env is not None else ctx.get("env"),
+            release=self.release,
             user_id=ctx.get("user_id"),
             trace_id=trace_id if trace_id is not None else ctx.get("trace_id"),
             payload=payload,

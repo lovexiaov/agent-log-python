@@ -270,6 +270,9 @@ def _resource_attributes(event):
     attrs = [to_key_value(_SEMCONV_SERVICE_NAME, event.get("service") or "app")]
     if event.get("env"):
         attrs.append(to_key_value(_SEMCONV_DEPLOYMENT_ENV, event["env"]))
+    if event.get("release"):
+        # Schema v1.3: release -> OTel service.version.
+        attrs.append(to_key_value(_SEMCONV_SERVICE_VERSION, event["release"]))
     if event.get("session_id"):
         attrs.append(to_key_value(_SEMCONV_SESSION_ID, event["session_id"]))
     attrs.extend(

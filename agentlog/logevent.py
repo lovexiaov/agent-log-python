@@ -19,10 +19,10 @@ class LogEvent:
 
     # Closed set of allowed top-level keys (matches schema additionalProperties:false)
     REQUIRED = ("ts", "level", "service", "event_type", "session_id", "agent_auto", "message")
-    OPTIONAL = ("subsystem", "category", "env", "user_id", "trace_id", "span_id", "payload")
+    OPTIONAL = ("subsystem", "category", "env", "release", "user_id", "trace_id", "span_id", "payload")
 
     def __init__(self, ts, level, service, event_type, session_id, agent_auto, message,
-                 subsystem=None, category=None, env=None, user_id=None,
+                 subsystem=None, category=None, env=None, release=None, user_id=None,
                  trace_id=None, payload=None, span_id=None):
         self.ts = ts
         self.level = level
@@ -34,6 +34,8 @@ class LogEvent:
         self.subsystem = subsystem
         self.category = category
         self.env = env
+        # Schema v1.3: optional release identifier (build version / git sha).
+        self.release = release
         self.user_id = user_id
         self.trace_id = trace_id
         self.payload = payload
@@ -66,6 +68,10 @@ class LogEvent:
             obj["category"] = self.category
         if self.env:
             obj["env"] = self.env
+        # Schema v1.3: optional release; a too-long value is dropped rather
+        # than written as schema-invalid data.
+        if isinstance(self.release, str) and 0 < len(self.release) <= 128:
+            obj["release"] = self.release
         if self.user_id:
             obj["user_id"] = self.user_id
         # Schema v1.2: only emit a trace_id that conforms (32 lowercase hex);

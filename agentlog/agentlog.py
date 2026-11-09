@@ -53,6 +53,7 @@ class AgentLog:
             session_id=self._session_id,
             redact_enabled=config.redact_enabled,
             env=config.env,
+            release=config.release,
         )
         return self
 

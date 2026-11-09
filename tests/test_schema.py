@@ -26,8 +26,8 @@ from agentlog.sink import MemorySink
 
 ALLOWED = {
     "ts", "level", "service", "event_type", "session_id", "agent_auto",
-    "message", "subsystem", "category", "env", "user_id", "trace_id", "span_id",
-    "payload",
+    "message", "subsystem", "category", "env", "release", "user_id", "trace_id",
+    "span_id", "payload",
 }
 REQUIRED = {"ts", "level", "service", "event_type", "session_id", "agent_auto", "message"}
 LEVELS = {"trace", "debug", "info", "warn", "error", "critical"}
@@ -35,7 +35,7 @@ EVENT_TYPE_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 RFC3339_RE = re.compile(r"T.*(Z|[+-]\d{2}:?\d{2})$")
 
 
-def make_logger(min_level="info", redact_enabled=True, redact_paths=None):
+def make_logger(min_level="info", redact_enabled=True, redact_paths=None, release=None):
     """Build a Logger writing to an in-memory sink."""
     redactor = Redactor(enabled=redact_enabled, custom_paths=redact_paths)
     sink = MemorySink()
@@ -48,6 +48,7 @@ def make_logger(min_level="info", redact_enabled=True, redact_paths=None):
         session_id="session-fixed-for-test",
         redact_enabled=redact_enabled,
         env="test",
+        release=release,
     )
     return logger, sink
 
@@ -80,6 +81,10 @@ def assert_conforms(self, line):
     # 9b. span_id (Schema v1.1) must be 16 lowercase hex chars
     if "span_id" in L:
         self.assertRegex(L["span_id"], r"^[0-9a-f]{16}$", "bad span_id: %r" % L.get("span_id"))
+    # 9c. release (Schema v1.3) must be a non-empty string of at most 128 chars
+    if "release" in L:
+        self.assertIsInstance(L["release"], str, "release must be a string")
+        self.assertTrue(0 < len(L["release"]) <= 128, "bad release: %r" % L.get("release"))
     # 10. ts looks like RFC3339
     self.assertRegex(L["ts"], r"T", "ts missing 'T'")
     self.assertRegex(L["ts"], RFC3339_RE, "ts not RFC3339-like: %r" % L.get("ts"))
@@ -204,6 +209,33 @@ class SchemaTests(unittest.TestCase):
         self.assertRegex(get_session_id(), r"^[0-9a-f]{32}$")
         self.assertRegex(new_trace_id(), r"^[0-9a-f]{32}$")
 
+    def test_release_stamped_on_manual_and_auto_events(self):
+        logger, sink = make_logger(min_level="info", release="1.4.2+sha.abc")
+        logger.info("manual with release")
+        logger.record_auto("crash", "auto with release", payload={"mechanism": "uncaught"})
+        parsed = [assert_conforms(self, ln) for ln in sink.lines()]
+        self.assertEqual(len(parsed), 2)
+        for L in parsed:
+            self.assertEqual(L.get("release"), "1.4.2+sha.abc")
+
+    def test_release_absent_when_not_configured(self):
+        logger, sink = make_logger(min_level="info")
+        logger.info("no release")
+        L = assert_conforms(self, sink.lines()[0])
+        self.assertNotIn("release", L)
+
+    def test_release_too_long_is_dropped(self):
+        logger, sink = make_logger(min_level="info", release="x" * 200)
+        logger.info("long release")
+        L = assert_conforms(self, sink.lines()[0])
+        self.assertNotIn("release", L)
+
+    def test_child_inherits_release(self):
+        logger, sink = make_logger(min_level="info", release="1.4.2")
+        logger.child({"user_id": "u1"}).info("child")
+        L = assert_conforms(self, sink.lines()[0])
+        self.assertEqual(L["release"], "1.4.2")
+
     def test_child_isolation_parent_unchanged(self):
         logger, sink = make_logger(min_level="info")
         # capture parent state
@@ -254,6 +286,8 @@ class CrashHandlerTest(unittest.TestCase):
         self.assertIn("payload", L)
         self.assertEqual(L["payload"]["exception"], "ValueError")
         self.assertIn("stack", L["payload"])
+        self.assertEqual(L["payload"]["mechanism"], "uncaught")
+        self.assertEqual(L["payload"]["exception_message"], "boom in billing")
 
 
 if __name__ == "__main__":

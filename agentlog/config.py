@@ -16,13 +16,16 @@ class LoggingConfig:
     """Configuration consumed by :class:`agentlog.agentlog.AgentLog`."""
 
     def __init__(self, service="app", env=None, level="info",
-                 redact_enabled=True, redact_paths=None, export_directory=None):
+                 redact_enabled=True, redact_paths=None, export_directory=None,
+                 release=None):
         self.service = service
         self.env = env
         self.level = level
         self.redact_enabled = redact_enabled
         self.redact_paths = list(redact_paths) if redact_paths else []
         self.export_directory = export_directory
+        # Schema v1.3: optional release identifier, stamped on every event.
+        self.release = release
 
     @classmethod
     def from_json(cls, text: str) -> "LoggingConfig":
@@ -38,6 +41,9 @@ class LoggingConfig:
         if not isinstance(service, str) or service == "":
             service = "app"
         env = d.get("env")
+        release = d.get("release")
+        if not isinstance(release, str) or release == "":
+            release = None
         level = d.get("level", "info")
         if not Level.is_valid(level):
             level = "info"
@@ -56,6 +62,7 @@ class LoggingConfig:
             redact_enabled=redact_enabled,
             redact_paths=redact_paths,
             export_directory=export_directory,
+            release=release,
         )
 
     @classmethod

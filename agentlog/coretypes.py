@@ -120,8 +120,9 @@ def install_crash_handler(agentlog=None):
     """Install a :func:`sys.excepthook` that records uncaught exceptions.
 
     On an uncaught exception this calls ``record_auto("crash", ...)`` so the
-    event is written with ``agent_auto=True`` and a payload containing
-    ``thread``, ``exception`` and ``stack``.
+    event is written with ``agent_auto=True`` and a payload containing the
+    standard exception vocabulary (``exception`` / ``exception_message`` /
+    ``stack`` / ``mechanism``) plus ``thread``.
 
     The previous excepthook (if any) is preserved and invoked afterwards so
     behavior of other hooks is not broken.
@@ -134,9 +135,13 @@ def install_crash_handler(agentlog=None):
                                  (exc_type.__name__ if exc_type else "unknown"))
         payload = {
             "thread": threading.current_thread().name,
-            "exception": exc_type.__name__ if exc_type is not None else None,
             "stack": stack,
+            "mechanism": "uncaught",
         }
+        if exc_type is not None:
+            payload["exception"] = exc_type.__name__
+        if exc_value is not None:
+            payload["exception_message"] = str(exc_value)
         try:
             alog = agentlog
             if alog is None:

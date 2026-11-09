@@ -54,6 +54,15 @@ class ConfigTest(unittest.TestCase):
         self.assertTrue(cfg.export_directory.endswith("agent-log"))
         self.assertTrue(os.path.join(tempfile.gettempdir(), "agent-log").startswith("/"))
 
+    def test_release_is_optional(self):
+        self.assertIsNone(LoggingConfig.from_json("{}").release)
+        cfg = LoggingConfig.from_json('{"release": "1.4.2"}')
+        self.assertEqual(cfg.release, "1.4.2")
+
+    def test_release_non_string_is_ignored(self):
+        self.assertIsNone(LoggingConfig.from_json('{"release": 42}').release)
+        self.assertIsNone(LoggingConfig.from_json('{"release": ""}').release)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -235,6 +235,24 @@ class ResourceTest(unittest.TestCase):
         self.assertEqual(service_names, ["real-service"])
         self.assertIn("service.version", names)
 
+    def test_release_maps_to_service_version(self):
+        body = to_otlp_logs([make_event(release="1.4.2")])
+        attrs = body["resourceLogs"][0]["resource"]["attributes"]
+        versions = [
+            kv["value"]["stringValue"] for kv in attrs if kv["key"] == "service.version"
+        ]
+        self.assertEqual(versions, ["1.4.2"])
+
+    def test_builtin_service_version_wins_over_extra(self):
+        body = to_otlp_logs(
+            [make_event(release="1.4.2")], extra_resource={"service.version": "9.9.9"}
+        )
+        attrs = body["resourceLogs"][0]["resource"]["attributes"]
+        versions = [
+            kv["value"]["stringValue"] for kv in attrs if kv["key"] == "service.version"
+        ]
+        self.assertEqual(versions, ["1.4.2"])
+
 
 class LogRecordTest(unittest.TestCase):
     def test_core_fields(self):
