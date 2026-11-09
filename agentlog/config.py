@@ -39,8 +39,6 @@ class LoggingConfig:
             service = "app"
         env = d.get("env")
         level = d.get("level", "info")
-        # normalize level via from_wire so "warning" (read alias) is accepted
-        level = Level.from_wire(level)
         if not Level.is_valid(level):
             level = "info"
         redact_enabled = d.get("redact_enabled", True)

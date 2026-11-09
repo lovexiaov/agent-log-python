@@ -79,9 +79,9 @@ class LevelMappingTest(unittest.TestCase):
         for level in LEVELS:
             self.assertEqual(level_to_severity(level), expected[level], level)
 
-    def test_warning_alias_is_normalized(self):
-        # Read-side alias must map like `warn`, never like a separate level.
-        self.assertEqual(level_to_severity("warning"), ("WARN", 13))
+    def test_warning_is_not_a_canonical_level(self):
+        # `warning` is not one of the six canonical levels; it degrades to INFO.
+        self.assertEqual(level_to_severity("warning"), ("INFO", 9))
 
     def test_unknown_level_degrades_to_info(self):
         self.assertEqual(level_to_severity("nope"), ("INFO", 9))
@@ -398,9 +398,8 @@ class SpanTest(unittest.TestCase):
         self.assertEqual(attrs["db.system"], "postgresql")
         self.assertNotIn("error.type", attrs)
 
-    def test_db_query_span_reads_legacy_sql_and_query_keys(self):
-        # Pre-v1.1 Go/Java builds wrote `query` / `sql`; read-side compatibility
-        # keeps historical JSONL mappable. Writers must use `statement`.
+    def test_db_query_span_ignores_legacy_sql_and_query_keys(self):
+        # Only `statement` is read; legacy `sql` / `query` keys are ignored.
         for key in ("sql", "query"):
             span = event_to_span(
                 make_event(
@@ -408,7 +407,7 @@ class SpanTest(unittest.TestCase):
                     payload={"operation": "SELECT", key: "SELECT 1"},
                 )
             )
-            self.assertEqual(scalar_map(span)["db.statement"], "SELECT 1", key)
+            self.assertEqual(span["name"], "SELECT ", key)
 
     def test_statement_wins_over_legacy_keys(self):
         span = event_to_span(

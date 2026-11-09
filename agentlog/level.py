@@ -2,8 +2,8 @@
 
 trace < debug < info < warn < error < critical
 
-`warning` is a read-only *alias* understood only on the read side; the writer
-MUST never emit it. `from_wire` normalizes `warning -> warn`.
+Levels are the six canonical values; there are no aliases. Writers must emit
+one of these; readers degrade anything else to `info` at the export boundary.
 """
 
 #: Ordered level names, lowest weight first.
@@ -30,9 +30,6 @@ class Level:
     ERROR = "error"
     CRITICAL = "critical"
 
-    #: read-side alias -> canonical
-    _ALIASES = {"warning": "warn"}
-
     @classmethod
     def weight(cls, name: str) -> int:
         """Return the numeric weight of a canonical level name."""
@@ -46,23 +43,22 @@ class Level:
         """Canonicalize a *write-side* level name.
 
         Raises ValueError if the name is not one of the 6 canonical levels.
-        `warning` is rejected here because it must never be written.
         """
         if name not in _WEIGHTS:
             raise ValueError(
-                "invalid level %r: must be one of %s (warning is read-only)" % (name, LEVELS)
+                "invalid level %r: must be one of %s" % (name, LEVELS)
             )
         return name
 
     @classmethod
     def from_wire(cls, name: str) -> str:
-        """Normalize a *read-side* level name (alias-aware).
+        """Return a *read-side* level name unchanged (no aliases).
 
-        Accepts `warning` and maps it to `warn`. Unknown names are passed
-        through unchanged so callers can decide; canonicalization for writing
-        should use `from_name`.
+        The six canonical levels are the only valid values; anything else is
+        passed through so the export boundary can degrade it to `info`.
+        Canonicalization for writing should use `from_name`.
         """
-        return cls._ALIASES.get(name, name)
+        return name
 
     @classmethod
     def is_valid(cls, name: str) -> bool:

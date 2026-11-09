@@ -95,10 +95,9 @@ _HTTP_METHOD_KEYS = ("method", "http_method", "http.method")
 _URL_KEYS = ("url", "url_full", "url.full")
 _STATUS_KEYS = ("status_code", "status", "statusCode", "http.status_code")
 _DURATION_KEYS = ("duration_ms", "durationMs", "duration")
-#: The canonical SQL key is ``statement`` (unified across the six SDKs in
-#: Schema v1.1). ``sql`` / ``query`` are accepted on **read** only, so that
-#: events already written by older Go/Java builds still map correctly.
-_SQL_KEYS = ("statement", "sql", "query")
+#: The canonical SQL key is ``statement`` (unified across the six SDKs).
+#: No legacy aliases: ``sql`` / ``query`` are not read.
+_SQL_KEYS = ("statement",)
 _DB_SYSTEM_KEYS = ("db_system", "db.system", "system")
 _DB_OPERATION_KEYS = ("operation", "op")
 
@@ -256,8 +255,8 @@ def _span_trace_id(event):
 def level_to_severity(level):
     """Map an agent-log level to ``(severityText, severityNumber)``.
 
-    Read-side alias ``warning`` is normalized to ``warn``; an unknown level
-    degrades to INFO rather than failing the whole export.
+    Unknown levels (including the non-canonical ``warning``) degrade to INFO
+    rather than failing the whole export.
     """
     canonical = Level.from_wire(level)
     return SEVERITY.get(canonical, SEVERITY["info"])
