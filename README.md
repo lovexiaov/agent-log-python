@@ -49,7 +49,7 @@ Module-level facade (`agentlog`):
 `trace | debug | info | warn | error | critical` (6, lowercase). `warning` is a
 read-only alias that is **never written** — it normalizes to `warn` on read.
 
-### Wire format (Schema v1.1)
+### Wire format (Schema v1.2)
 
 Required top-level keys: `ts, level, service, event_type, session_id, agent_auto, message`.
 Optional: `subsystem, category, env, user_id, trace_id, span_id, payload`. No other keys allowed.
@@ -81,10 +81,23 @@ schema-violating line; exporters then derive one deterministically.
 
 ### Automatic instrumentation
 
+Two opt-in helpers are provided (the package stays standard-library only —
+`requests` is a soft dependency, so `instrument_requests` is a no-op when it is
+not installed):
+
 ```python
-from agentlog import install_crash_handler
-install_crash_handler()  # sys.excepthook -> record_auto("crash", ...) with stack
+from agentlog import install_crash_handler, instrument_requests
+
+install_crash_handler()   # sys.excepthook -> record_auto("crash", ...) with stack
+instrument_requests()     # monkey-patch requests.Session.send -> network_request
 ```
+
+- `install_crash_handler()` — installs a `sys.excepthook` that records uncaught
+  exceptions as `crash` auto-events (with `thread` / `exception` / `stack`);
+  `uninstall_crash_handler()` restores the previous hook.
+- `instrument_requests()` — patches `requests.Session.send` (idempotent) so every
+  HTTP call emits a `network_request` auto-event. For clients other than
+  `requests` (e.g. `urllib`), call `record_network_request(...)` directly.
 
 Crash handlers, signal handlers, or a context-manager can be plugged in; any of
 them should call `record_auto(...)` so the event carries `agent_auto: true`.

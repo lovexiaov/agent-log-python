@@ -19,6 +19,11 @@ Schema v1 (frozen 2026-11-02).
 
 - `newTraceId()`：生成 Schema 合法的 trace id（uuid4 去横线）。
 
+### Docs
+
+- README 自动埋点小节补上 `instrument_requests()`（patch `requests` 库 → `network_request`）
+  与 `uninstall_crash_handler()`；线格式版本标注更正为 Schema v1.2。
+
 ## [1.0.0] - 2026-11-07
 
 ### Added
