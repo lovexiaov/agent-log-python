@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/); this project adheres to
 Schema v1 (frozen 2026-11-02).
 
-## [Unreleased]
+## [1.3.0] - 2026-11-10
 
 Schema v1.3（向后兼容增量）。
 

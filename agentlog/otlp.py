@@ -43,7 +43,7 @@ from agentlog.level import Level
 from agentlog.sink import Sink
 
 #: Keep in sync with ``agentlog.__version__`` (asserted by the test suite).
-SDK_VERSION = "1.0.0"
+SDK_VERSION = "1.3.0"
 
 #: ``InstrumentationScope`` reported on every batch.
 _SCOPE = {"name": "agentlog.otlp", "version": SDK_VERSION}

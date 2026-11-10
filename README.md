@@ -121,7 +121,7 @@ Loki, Grafana, Datadog …) without changing the wire format.
 from agentlog import OTLPSink, to_otlp_json
 from agentlog.otlp import to_otlp
 
-sink = OTLPSink(extra_resource={"service.version": "1.2.0"})
+sink = OTLPSink(extra_resource={"service.version": "1.3.0"})
 AgentLog.bootstrap(config=config, sink=sink)
 
 AgentLog.info("checkout started", payload={"cart_size": 3})
