@@ -121,7 +121,7 @@ Loki, Grafana, Datadog …) without changing the wire format.
 from agentlog import OTLPSink, to_otlp_json
 from agentlog.otlp import to_otlp
 
-sink = OTLPSink(extra_resource={"service.version": "1.3.0"})
+sink = OTLPSink(extra_resource={"service.version": "1.4.0"})
 AgentLog.bootstrap(config=config, sink=sink)
 
 AgentLog.info("checkout started", payload={"cart_size": 3})
@@ -169,6 +169,37 @@ Mapping contract (details in `docs/logging-framework/OTLP-MAPPING.md`):
 Ids are **deterministic**: an event's own `span_id` (Schema v1.1) is used verbatim;
 otherwise ids are SHA-256 derived, so re-exporting the same event yields the same
 `traceId`/`spanId` and retries stay idempotent.
+
+## AI interaction events (Schema v1.4)
+
+All six ends share one AI event contract (`INTERFACE.md` §4.4): six standard
+`event_type` values, a snake_case payload vocabulary, and `agent_auto=false`
+(explicit business-side instrumentation — the framework never hooks an LLM SDK).
+
+```python
+from agentlog import record_ai_request, record_ai_response, record_ai_error
+
+record_ai_request("gpt-4o", "summarize this", request_id="req_001", provider="openai")
+record_ai_response("gpt-4o", 530, request_id="req_001",
+                   prompt_tokens=320, completion_tokens=210, finish_reason="stop")
+record_ai_error("RateLimitError", "429 too many requests", request_id="req_001")
+```
+
+| helper | `event_type` | level |
+| --- | --- | --- |
+| `record_ai_request` | `ai_request_initiated` | info |
+| `record_ai_response` | `ai_response_received` | info |
+| `record_ai_tool_call` | `ai_tool_call_initiated` | info |
+| `record_ai_tool_result` | `ai_tool_call_completed` | info |
+| `record_ai_guardrail` | `ai_guardrail_triggered` | warn |
+| `record_ai_error` | `ai_error` | error |
+
+`request_id` links request → response → tool → error within one turn; it is optional
+and never generated/validated by the framework. Extra keyword arguments are forwarded
+into `payload` verbatim — use the standard snake_case keys (`model`, `prompt_text`,
+`total_tokens`, `tool_name`, `ok`, `guardrail_type`, `exception`, ...). `ai_error` reuses
+the v1.3 exception vocabulary. OTLP export emits a LogRecord only — **no span**;
+attach `span_id` explicitly if a downstream system needs to build one.
 
 ## Run tests
 

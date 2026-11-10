@@ -107,7 +107,19 @@ class EventType:
     # manual logging
     LOG = "log"
 
+    # AI interaction events (Schema v1.4)
+    AI_REQUEST_INITIATED = "ai_request_initiated"
+    AI_RESPONSE_RECEIVED = "ai_response_received"
+    AI_TOOL_CALL_INITIATED = "ai_tool_call_initiated"
+    AI_TOOL_CALL_COMPLETED = "ai_tool_call_completed"
+    AI_GUARDRAIL_TRIGGERED = "ai_guardrail_triggered"
+    AI_ERROR = "ai_error"
+
     AUTO_TYPES = {SCREEN_VIEW, UI_INTERACTION, NETWORK_REQUEST, CRASH, HANG, DB_QUERY}
+    AI_TYPES = {
+        AI_REQUEST_INITIATED, AI_RESPONSE_RECEIVED, AI_TOOL_CALL_INITIATED,
+        AI_TOOL_CALL_COMPLETED, AI_GUARDRAIL_TRIGGERED, AI_ERROR,
+    }
 
 
 # --------------------------------------------------------------------------- #

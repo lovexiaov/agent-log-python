@@ -35,6 +35,14 @@ from agentlog.coretypes import (
     new_trace_id,
 )
 from agentlog.instrumentation import instrument_requests, record_network_request
+from agentlog.ai_events import (
+    record_ai_request,
+    record_ai_response,
+    record_ai_tool_call,
+    record_ai_tool_result,
+    record_ai_guardrail,
+    record_ai_error,
+)
 from agentlog.json import dumps, loads
 from agentlog.level import Level
 from agentlog.logger import Logger
@@ -95,6 +103,12 @@ __all__ = [
     "get_session_id",
     "instrument_requests",
     "record_network_request",
+    "record_ai_request",
+    "record_ai_response",
+    "record_ai_tool_call",
+    "record_ai_tool_result",
+    "record_ai_guardrail",
+    "record_ai_error",
     # facade convenience
     "bootstrap",
     "instance",
@@ -113,4 +127,4 @@ __all__ = [
     "export_path",
 ]
 
-__version__ = "1.3.0"
+__version__ = "1.4.0"

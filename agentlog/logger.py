@@ -142,5 +142,17 @@ class Logger:
                                 payload, agent_auto=True)
         self.emit(evt)
 
+    def record(self, level, event_type, message, category=None, trace_id=None,
+               payload=None, agent_auto=False):
+        """Emit a fully-specified event.
+
+        Used by the AI convenience helpers (``agentlog.ai_events``) and any
+        caller that needs a non-``log`` event_type with an explicit level and
+        ``agent_auto`` flag. Manual AI events pass ``agent_auto=False``.
+        """
+        evt = self._build_event(level, event_type, message, category, trace_id,
+                                payload, agent_auto)
+        self.emit(evt)
+
     def export_path(self):
         return self.sink.export_path()

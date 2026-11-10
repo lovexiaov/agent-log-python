@@ -43,7 +43,7 @@ from agentlog.level import Level
 from agentlog.sink import Sink
 
 #: Keep in sync with ``agentlog.__version__`` (asserted by the test suite).
-SDK_VERSION = "1.3.0"
+SDK_VERSION = "1.4.0"
 
 #: ``InstrumentationScope`` reported on every batch.
 _SCOPE = {"name": "agentlog.otlp", "version": SDK_VERSION}
@@ -321,7 +321,8 @@ def event_attributes(event):
         attrs.append(to_key_value(_SEMCONV_ENDUSER_ID, event["user_id"]))
     payload = event.get("payload") or {}
     attrs.extend(_key_values(payload, prefix="payload."))
-    if event.get("event_type") in ("crash", "hang"):
+    # Schema v1.4：ai_error 复用 v1.3 异常词表，与 crash/hang 同样映射为 exception.*
+    if event.get("event_type") in ("crash", "hang", "ai_error"):
         attrs.extend(_exception_attributes(payload))
     return attrs
 
